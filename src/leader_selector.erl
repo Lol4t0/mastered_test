@@ -1,5 +1,6 @@
 -module(leader_selector).
 -behaviour(gen_server).
+-include_lib("log.hrl").
 
 -export([start/6, start_link/6, stop/1, init/1, terminate/2, handle_call/3, handle_cast/2, handle_info/2, code_change/3]).
 
@@ -8,44 +9,41 @@ behaviour_info(callbacks) ->
     [{restart_leader,1}, {restart_idle,2}].
 
 
-log(Msg, Args) ->
-	io:format("MASTERED_TEST::" ++ Msg ++ "~n", Args).
-
 %% The startfunction.
-start(ConnectionPId, WorkerModule, Address, Prefix, NodeNum, WorkerRef) ->
-    gen_server:start(?MODULE, [ConnectionPId, WorkerModule, Address, Prefix, NodeNum, WorkerRef], []).
+start(ConnectionPId, WorkerModule, Address, Prefix, Order, WorkerRef) ->
+    gen_server:start(?MODULE, [ConnectionPId, WorkerModule, Address, Prefix, Order, WorkerRef], []).
 
-start_link(ConnectionPId, WorkerModule, Address, Prefix, NodeNum, WorkerRef) ->
-    gen_server:start_link(?MODULE, [ConnectionPId, WorkerModule, Address, Prefix, NodeNum, WorkerRef], []).
+start_link(ConnectionPId, WorkerModule, Address, Prefix, Order, WorkerRef) ->
+    gen_server:start_link(?MODULE, [ConnectionPId, WorkerModule, Address, Prefix, Order, WorkerRef], []).
 
 
-init([ConnectionPId, WorkerModule, Address, Prefix, NodeNum, WorkerRef]) ->
-	SelfNodeName = io_lib:format("~s/~w", [Prefix, NodeNum]),
-	log("Prefix: ~s", [Prefix]),
+init([ConnectionPId, WorkerModule, Address, Prefix, Order, WorkerRef]) ->
+	SelfNodeName = io_lib:format("~s/~w", [Prefix, Order]),
+	?LOG("Prefix: ~s", [Prefix]),
 	{ok, _Path} = ezk:create(ConnectionPId, SelfNodeName, Address, e), % e for EPHEMERAL
-	reelect({ConnectionPId, WorkerModule, Prefix, NodeNum, WorkerRef}).
+	reelect({ConnectionPId, WorkerModule, Prefix, Order, WorkerRef}).
 
-reelect(State = {ConnectionPId, _WorkerModule, Prefix, NodeNum, _WorkerRef}) ->
+reelect(State = {ConnectionPId, _WorkerModule, Prefix, Order, _WorkerRef}) ->
 	{ok, List} = ezk:ls(ConnectionPId, Prefix, self(), nodes_changed),
 	ActiveNodes = lists:sort(lists:map (fun(<<Path>>) -> list_to_integer(Path) end, List)),
-	log("active nodes: ~w", [ActiveNodes]),
-	_Return = case lists:takeWhile(fun(N) -> N < NodeNum end) of
+	?LOG("active nodes: ~w", [ActiveNodes]),
+	_Return = case lists:takeWhile(fun(N) -> N < Order end) of
 		[] ->
-			log("starting as leader", []),
+			?LOG("starting as leader", []),
 			restart_as_leader(State);
 		Nodes ->
 			ActiveNode = lists:last(Nodes),
-			log("starting as idle with active node: ~w", [ActiveNode]),
+			?LOG("starting as idle with active node: ~w", [ActiveNode]),
 			restart_as_idle(State, ActiveNode)
 	end.
 
-restart_as_leader(SelfState = {_ConnectionPId, WorkerModule, _Prefix, _NodeNum, WorkerRef}) ->
+restart_as_leader(SelfState = {_ConnectionPId, WorkerModule, _Prefix, _Order, WorkerRef}) ->
 	WorkerModule:restart_leader(WorkerRef),
 	{SelfState, leader}.
 
-restart_as_idle(SelfState = {ConnectionPId, WorkerModule, Prefix, _NodeNum, WorkerRef}, ActiveNode) ->
+restart_as_idle(SelfState = {ConnectionPId, WorkerModule, Prefix, _Order, WorkerRef}, ActiveNode) ->
 	ActiveNodePath = io_lib:format("~s/~w", [Prefix, ActiveNode]),
-	log("active node path: ~s", [ActiveNodePath]),
+	?LOG("active node path: ~s", [ActiveNodePath]),
 	case ezk:get(ConnectionPId, ActiveNodePath, active_node_changed) of
 		{ok, {<<Address>>, _Stat}} ->
 			WorkerModule:restart_idle(WorkerRef, Address),
@@ -55,8 +53,8 @@ restart_as_idle(SelfState = {ConnectionPId, WorkerModule, Prefix, _NodeNum, Work
 	end.
 
 
-terminate(_Reason, {{ConnectionPId, _WorkerModule, Prefix, NodeNum, _WorkerRef}, _Mode}) ->
-	NodePath = io_lib:format("~s/~w", [Prefix, NodeNum]),
+terminate(_Reason, {{ConnectionPId, _WorkerModule, Prefix, Order, _WorkerRef}, _Mode}) ->
+	NodePath = io_lib:format("~s/~w", [Prefix, Order]),
 	ezk:delete(ConnectionPId, NodePath),
     ok.
 

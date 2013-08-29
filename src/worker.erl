@@ -8,20 +8,20 @@
 
 -define(PREFIX, "/mastered_test/election/worker~w").
 
-start(ConnectionPid, NodeNum, {SelfAddress, WorkerNum}) ->
-	gen_server:start(?MODULE, [ConnectionPid, NodeNum, SelfAddress, WorkerNum], []).
+start(ConnectionPid, Order, {SelfAddress, WorkerNum}) ->
+	gen_server:start(?MODULE, [ConnectionPid, Order, SelfAddress, WorkerNum], []).
 
-start_link(ConnectionPid, NodeNum, {SelfAddress, WorkerNum}) ->
-	gen_server:start_link(?MODULE, [ConnectionPid, NodeNum, SelfAddress, WorkerNum], []).
+start_link(ConnectionPid, Order, {SelfAddress, WorkerNum}) ->
+	gen_server:start_link(?MODULE, [ConnectionPid, Order, SelfAddress, WorkerNum], []).
 
 stop(Ref) ->
 	gen_server:call(Ref, stop).
 
 
 
-init([ConnectionPid, NodeNum, SelfAddress, WorkerNum]) ->
+init([ConnectionPid, Order, SelfAddress, WorkerNum]) ->
 	WorkerZNodePath = io_lib:format(?PREFIX, [WorkerNum]),
-	SelectorRef = leader_selector:start(ConnectionPid, ?MODULE, SelfAddress, WorkerZNodePath, NodeNum, self()),
+	{ok, SelectorRef} = leader_selector:start(ConnectionPid, ?MODULE, SelfAddress, WorkerZNodePath, Order, self()),
 	{SelfAddress, WorkerNum, SelectorRef, starting}.
 
 terminate(_Reason, {_SelfAddress, _WorkerNum, SelectorRef, _Mode}) ->
@@ -46,7 +46,7 @@ handle_call(client_request, _From, State ) ->
 		{SelfAddress, WorkerNum, _SelectorRef, leader} ->
 			{ok, io_lib:format("The Worker ~w on the node ~s is answering you, human. 42.~n", [WorkerNum, SelfAddress])};
 		{SelfAddress, WorkerNum, _SelectorRef, {idle, ActiveAddress}} ->
-			{ok, io_lib:format("Worker ~w on the node ~s is not in a position to answer you, the Human. Ask node ~s, please~n.",
+			{ok, io_lib:format("Worker ~w on the node ~s is not in a position to answer you, Human. Ask node ~s, please~n.",
 						   [WorkerNum, SelfAddress, ActiveAddress])}
 		end,
 	{reply, Answer, State};

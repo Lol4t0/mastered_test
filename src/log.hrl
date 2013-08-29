@@ -1,0 +1,1 @@
+-define(LOG(Msg, Args), log:put(?MODULE, Msg, Args)).
