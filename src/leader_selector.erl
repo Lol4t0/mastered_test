@@ -2,7 +2,7 @@
 -behaviour(gen_server).
 -include_lib("log.hrl").
 
--export([start/6, start_link/6, stop/1, init/1, terminate/2, handle_call/3, handle_cast/2, handle_info/2, code_change/3]).
+-export([start_link/6, stop/1, init/1, terminate/2, handle_call/3, handle_cast/2, handle_info/2, code_change/3]).
 
 -export([behaviour_info/1]).
 behaviour_info(callbacks) ->
@@ -10,20 +10,20 @@ behaviour_info(callbacks) ->
 
 
 %% The startfunction.
-start(ConnectionPId, WorkerModule, Address, Prefix, Order, WorkerRef) ->
-    gen_server:start(?MODULE, [ConnectionPId, WorkerModule, Address, Prefix, Order, WorkerRef], []).
-
 start_link(ConnectionPId, WorkerModule, Address, Prefix, Order, WorkerRef) ->
-    gen_server:start_link(?MODULE, [ConnectionPId, WorkerModule, Address, Prefix, Order, WorkerRef], []).
+    gen_server:start_link(?MODULE, {ConnectionPId, WorkerModule, Address, Prefix, Order, WorkerRef}, []).
 
 
-init([ConnectionPId, WorkerModule, Address, Prefix, Order, WorkerRef]) ->
+init({ConnectionPId, WorkerModule, Address, Prefix, Order, WorkerRef}) ->
+	process_flag(trap_exit, true),
 	SelfNodeName = lists:flatten(io_lib:format("~s/~w", [Prefix, Order])),
 	?LOG("Prefix: ~s", [Prefix]),
-	?LOG("EZK PID: ~w, Address: ~w", [ConnectionPId, list_to_binary(Address)]),
-	EzkAnswer = ezk:create(ConnectionPId, SelfNodeName, list_to_binary(Address), e), % e for EPHEMERAL
-	{ok, _Path} = EzkAnswer,
-	{ok, reelect({ConnectionPId, WorkerModule, Prefix, Order, WorkerRef})}.
+	case ezk:create(ConnectionPId, SelfNodeName, list_to_binary(Address), e) of % e for EPHEMERAL
+		{ok, _Path} ->
+			{ok, reelect({ConnectionPId, WorkerModule, Prefix, Order, WorkerRef})};
+		Error ->
+			{stop, {can_t_create_node, Error, SelfNodeName}}
+	end.
 
 reelect(State = {ConnectionPId, _WorkerModule, Prefix, Order, _WorkerRef}) ->
 	?LOG("reelecting. Self ~w. Prefix ~s", [self(), Prefix]),
@@ -58,7 +58,7 @@ restart_as_idle(SelfState = {ConnectionPId, WorkerModule, Prefix, _Order, Worker
 
 terminate(_Reason, {{ConnectionPId, _WorkerModule, Prefix, Order, _WorkerRef}, _Mode}) ->
 	NodePath = lists:flatten(io_lib:format("~s/~w", [Prefix, Order])),
-	?LOG("Deleting node ~s", [NodePath]),
+	?LOG("Deleting node ~s. Connection: ~w", [NodePath, ConnectionPId]),
 	ezk:delete(ConnectionPId, NodePath),
     ok.
 

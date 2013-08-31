@@ -2,34 +2,28 @@
 -include_lib("log.hrl").
 -behaviour(gen_server).
 -behaviour(leader_selector).
--export([start/3, start_link/3, stop/1,
+-export([start_link/3,
 		 restart_leader/1, restart_idle/2,
 		 client_request/1,
 		 init/1, terminate/2, handle_call/3, handle_cast/2, handle_info/2, code_change/3]).
 
 -define(PREFIX, "/mastered_test/election/worker~w").
 
-start(ConnectionPid, Order, {SelfAddress, WorkerNum}) ->
-	gen_server:start(?MODULE, [ConnectionPid, Order, SelfAddress, WorkerNum], []).
-
 start_link(ConnectionPid, Order, {SelfAddress, WorkerNum}) ->
-	gen_server:start_link(?MODULE, [ConnectionPid, Order, SelfAddress, WorkerNum], []).
-
-stop(Ref) ->
-	gen_server:call(Ref, stop).
-
+	gen_server:start_link({global, {worker, WorkerNum}}, ?MODULE, [ConnectionPid, Order, SelfAddress, WorkerNum], []).
 
 
 init([ConnectionPid, Order, SelfAddress, WorkerNum]) ->
 	?LOG("starting worker~w", [WorkerNum]),
+	process_flag(trap_exit, true),
 	WorkerZNodePath = lists:flatten(io_lib:format(?PREFIX, [WorkerNum])),
-	case leader_selector:start(ConnectionPid, ?MODULE, SelfAddress, WorkerZNodePath, Order, self()) of
+	case leader_selector:start_link(ConnectionPid, ?MODULE, SelfAddress, WorkerZNodePath, Order, self()) of
 		{ok, SelectorRef} ->
 			?LOG("ok", []),
 			{ok, {SelfAddress, WorkerNum, SelectorRef, starting}};
-		Throw ->
-			?LOG("Failed~w", [Throw]),
-			{stop, Throw}
+		Error ->
+			?LOG("Failed~w", [Error]),
+			{stop, Error}
 	end.
 
 terminate(_Reason, {_SelfAddress, WorkerNum, SelectorRef, _Mode}) ->
@@ -39,22 +33,14 @@ terminate(_Reason, {_SelfAddress, WorkerNum, SelectorRef, _Mode}) ->
 
 restart_leader(Ref) ->
 	?LOG("starting worker as leader", []),
-	R = gen_server:cast(Ref, leader),
-	?LOG("done", []),
-	R.
+	gen_server:cast(Ref, leader).
 
 restart_idle(Ref, Address) ->
 	?LOG("starting worker as idle", []),
-	R = gen_server:cast(Ref, {idle, Address}),
-	?LOG("done", []),
-	R.
+	gen_server:cast(Ref, {idle, Address}).
 
-client_request(Ref) ->
-	gen_server:call(Ref, client_request).
-
-
-handle_call(stop, _From, S) ->
-{stop, normal, ok, S};
+client_request(WorkerNum) ->
+	gen_server:call({global, {worker, WorkerNum}}, client_request).
 
 handle_call(client_request, _From, State ) ->
 	Answer = case State of

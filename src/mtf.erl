@@ -1,4 +1,4 @@
--module(mtldr).
+-module(mtf).
 -export([start/0, stop/0, restart/0, ask/1]).
 
 start() ->
@@ -19,5 +19,5 @@ restart() ->
 	start().
 
 ask(N) ->
-	{ok, S} = mastered_test:ask_worker(N),
+	{ok, S} = worker:client_request(N),
 	io:format("~s", [S]).
