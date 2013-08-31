@@ -1,5 +1,5 @@
 -module(mtldr).
--export([start/0, stop/0, restart/0]).
+-export([start/0, stop/0, restart/0, ask/1]).
 
 start() ->
 	code:add_path("../ezk/ebin"),
@@ -17,3 +17,7 @@ stop() ->
 restart() ->
 	stop(),
 	start().
+
+ask(N) ->
+	{ok, S} = mastered_test:ask_worker(N),
+	io:format("~s", [S]).

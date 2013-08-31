@@ -1,4 +1,5 @@
 -module(worker).
+-include_lib("log.hrl").
 -behaviour(gen_server).
 -behaviour(leader_selector).
 -export([start/3, start_link/3, stop/1,
@@ -15,24 +16,38 @@ start_link(ConnectionPid, Order, {SelfAddress, WorkerNum}) ->
 	gen_server:start_link(?MODULE, [ConnectionPid, Order, SelfAddress, WorkerNum], []).
 
 stop(Ref) ->
-	gen_server:call(Ref, stop).
+	exit(Ref, normal).
 
 
 
 init([ConnectionPid, Order, SelfAddress, WorkerNum]) ->
-	WorkerZNodePath = io_lib:format(?PREFIX, [WorkerNum]),
-	{ok, SelectorRef} = leader_selector:start(ConnectionPid, ?MODULE, SelfAddress, WorkerZNodePath, Order, self()),
-	{SelfAddress, WorkerNum, SelectorRef, starting}.
+	?LOG("starting worker~w", [WorkerNum]),
+	WorkerZNodePath = lists:flatten(io_lib:format(?PREFIX, [WorkerNum])),
+	case leader_selector:start(ConnectionPid, ?MODULE, SelfAddress, WorkerZNodePath, Order, self()) of
+		{ok, SelectorRef} ->
+			?LOG("ok", []),
+			{ok, {SelfAddress, WorkerNum, SelectorRef, starting}};
+		Throw ->
+			?LOG("Failed~w", [Throw]),
+			{stop, Throw}
+	end.
 
-terminate(_Reason, {_SelfAddress, _WorkerNum, SelectorRef, _Mode}) ->
+terminate(_Reason, {_SelfAddress, WorkerNum, SelectorRef, _Mode}) ->
+	?LOG("Deleting worker ~w", [WorkerNum]),
 	leader_selector:stop(SelectorRef).
 
 
 restart_leader(Ref) ->
-	gen_server:cast(Ref, leader).
+	?LOG("starting worker as leader", []),
+	R = gen_server:cast(Ref, leader),
+	?LOG("done", []),
+	R.
 
 restart_idle(Ref, Address) ->
-	gen_server:cast(Ref, {idle, Address}).
+	?LOG("starting worker as idle", []),
+	R = gen_server:cast(Ref, {idle, Address}),
+	?LOG("done", []),
+	R.
 
 client_request(Ref) ->
 	gen_server:call(Ref, client_request).
@@ -49,10 +64,7 @@ handle_call(client_request, _From, State ) ->
 			{ok, io_lib:format("Worker ~w on the node ~s is not in a position to answer you, Human. Ask node ~s, please~n.",
 						   [WorkerNum, SelfAddress, ActiveAddress])}
 		end,
-	{reply, Answer, State};
-
-handle_call(stop, _From, State) ->
-	{stop, normal, State}.
+	{reply, Answer, State}.
 
 
 handle_cast(S, {SelfAddress, WorkerNum, SelectorRef, _Mode}) ->

@@ -18,16 +18,19 @@ start_link(ConnectionPId, WorkerModule, Address, Prefix, Order, WorkerRef) ->
 
 
 init([ConnectionPId, WorkerModule, Address, Prefix, Order, WorkerRef]) ->
-	SelfNodeName = io_lib:format("~s/~w", [Prefix, Order]),
+	SelfNodeName = lists:flatten(io_lib:format("~s/~w", [Prefix, Order])),
 	?LOG("Prefix: ~s", [Prefix]),
-	{ok, _Path} = ezk:create(ConnectionPId, SelfNodeName, Address, e), % e for EPHEMERAL
-	reelect({ConnectionPId, WorkerModule, Prefix, Order, WorkerRef}).
+	?LOG("EZK PID: ~w, Address: ~w", [ConnectionPId, list_to_binary(Address)]),
+	EzkAnswer = ezk:create(ConnectionPId, SelfNodeName, list_to_binary(Address), e), % e for EPHEMERAL
+	{ok, _Path} = EzkAnswer,
+	{ok, reelect({ConnectionPId, WorkerModule, Prefix, Order, WorkerRef})}.
 
 reelect(State = {ConnectionPId, _WorkerModule, Prefix, Order, _WorkerRef}) ->
+	?LOG("reelecting. Self ~w. Prefix ~s", [self(), Prefix]),
 	{ok, List} = ezk:ls(ConnectionPId, Prefix, self(), nodes_changed),
-	ActiveNodes = lists:sort(lists:map (fun(<<Path>>) -> list_to_integer(Path) end, List)),
+	ActiveNodes = lists:sort(lists:map (fun(Path) -> list_to_integer(binary_to_list(Path)) end, List)),
 	?LOG("active nodes: ~w", [ActiveNodes]),
-	_Return = case lists:takeWhile(fun(N) -> N < Order end) of
+	_Return = case lists:takewhile(fun(N) -> N < Order end, ActiveNodes) of
 		[] ->
 			?LOG("starting as leader", []),
 			restart_as_leader(State);
@@ -42,11 +45,11 @@ restart_as_leader(SelfState = {_ConnectionPId, WorkerModule, _Prefix, _Order, Wo
 	{SelfState, leader}.
 
 restart_as_idle(SelfState = {ConnectionPId, WorkerModule, Prefix, _Order, WorkerRef}, ActiveNode) ->
-	ActiveNodePath = io_lib:format("~s/~w", [Prefix, ActiveNode]),
+	ActiveNodePath = lists:flatten(io_lib:format("~s/~w", [Prefix, ActiveNode])),
 	?LOG("active node path: ~s", [ActiveNodePath]),
-	case ezk:get(ConnectionPId, ActiveNodePath, active_node_changed) of
-		{ok, {<<Address>>, _Stat}} ->
-			WorkerModule:restart_idle(WorkerRef, Address),
+	case ezk:get(ConnectionPId, ActiveNodePath, self(), active_node_changed) of
+		{ok, {Address, _Stat}} ->
+			WorkerModule:restart_idle(WorkerRef, binary_to_list(Address)),
 			{SelfState, idle};
 		{error, no_dir} -> % node deleted while electing
 			reelect(SelfState)
@@ -54,19 +57,21 @@ restart_as_idle(SelfState = {ConnectionPId, WorkerModule, Prefix, _Order, Worker
 
 
 terminate(_Reason, {{ConnectionPId, _WorkerModule, Prefix, Order, _WorkerRef}, _Mode}) ->
-	NodePath = io_lib:format("~s/~w", [Prefix, Order]),
+	NodePath = lists:flatten(io_lib:format("~s/~w", [Prefix, Order])),
+	?LOG("Deleting node ~s", [NodePath]),
 	ezk:delete(ConnectionPId, NodePath),
     ok.
 
 stop(Ref) ->
 	gen_server:call(Ref, stop).
 
-handle_info({nodes_changed, {_Path, child_chnaged, _N}}, {State, leader}) ->
-	reelect(State);
+handle_info({nodes_changed, {_Path, child_changed, _N}}, {State, leader}) ->
+	{noreply, reelect(State)};
 handle_info({active_node_changed, {_Path, _Action, _N}}, {State, idle}) ->
-	reelect(State);
-handle_info(_, State) ->
-	State.
+	{noreply, reelect(State)};
+handle_info(M, State) ->
+	io:format("WTFF!!! ~w", [M]),
+	{noreply, State}.
 
 handle_call(stop, _From, State) ->
 	{stop, normal, State}.
