@@ -74,7 +74,7 @@ handle_info(M, State) ->
 	{noreply, State}.
 
 handle_call(stop, _From, State) ->
-	{stop, normal, State}.
+	{stop, normal, ok, State}.
 
 handle_cast(no_cast_allowed, _State) ->
 	error.

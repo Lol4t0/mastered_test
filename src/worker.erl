@@ -16,7 +16,7 @@ start_link(ConnectionPid, Order, {SelfAddress, WorkerNum}) ->
 	gen_server:start_link(?MODULE, [ConnectionPid, Order, SelfAddress, WorkerNum], []).
 
 stop(Ref) ->
-	exit(Ref, normal).
+	gen_server:call(Ref, stop).
 
 
 
@@ -53,6 +53,8 @@ client_request(Ref) ->
 	gen_server:call(Ref, client_request).
 
 
+handle_call(stop, _From, S) ->
+{stop, normal, ok, S};
 
 handle_call(client_request, _From, State ) ->
 	Answer = case State of

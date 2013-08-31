@@ -54,12 +54,15 @@ delete_workers([Worker|Others]) ->
 	delete_workers(Others).
 
 stop() ->
-	exit(whereis(mastered_test), shutdown).
+	gen_server:call(mastered_test, stop).
 
 
 ask_worker(WorkerNum) ->
 	gen_server:call(mastered_test, {ask_worker, WorkerNum}).
 
+
+handle_call(stop, _From, S) ->
+	{stop, normal, ok, S};
 
 handle_call({ask_worker, WorkerNum}, _From, State = {_CPid, Workers}) ->
 	Ref = lists:nth(WorkerNum, Workers),
