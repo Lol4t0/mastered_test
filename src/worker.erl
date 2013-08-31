@@ -10,7 +10,7 @@
 -define(PREFIX, "/mastered_test/election/worker~w").
 
 start_link(ConnectionPid, Order, {SelfAddress, WorkerNum}) ->
-	gen_server:start_link({global, {worker, WorkerNum}}, ?MODULE, [ConnectionPid, Order, SelfAddress, WorkerNum], []).
+	gen_server:start_link(?MODULE, [ConnectionPid, Order, SelfAddress, WorkerNum], []).
 
 
 init([ConnectionPid, Order, SelfAddress, WorkerNum]) ->
@@ -39,8 +39,8 @@ restart_idle(Ref, Address) ->
 	?LOG("starting worker as idle", []),
 	gen_server:cast(Ref, {idle, Address}).
 
-client_request(WorkerNum) ->
-	gen_server:call({global, {worker, WorkerNum}}, client_request).
+client_request(Ref) ->
+	gen_server:call(Ref, client_request).
 
 handle_call(client_request, _From, State ) ->
 	Answer = case State of

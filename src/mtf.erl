@@ -19,5 +19,5 @@ restart() ->
 	start().
 
 ask(N) ->
-	{ok, S} = worker:client_request(N),
+	{ok, S} = mastered_test:ask(N),
 	io:format("~s", [S]).
