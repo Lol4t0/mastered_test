@@ -9,4 +9,4 @@
               			{address, "local"}
               		]
               },
-              {modules,[mastered_test,mastered_test_app,worker]}]}.
+              {modules,[mastered_test,mastered_test_app,worker,leader_selector, log, mtf]}]}.
