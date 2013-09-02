@@ -7,50 +7,40 @@
 
 ### Сборка
 
-* Клонируем [ezk](https://github.com/infinipool/ezk) (предоставялющую API Zookeeper для Erlang).
-
-* Собираем ezk
-
-`cd ezk && make && cd ..`
-
 * Собираем mastered_test
 
+
+`./rebar get-deps`
 `./rebar compile`
 
-### Настройка конфигурации
+### Настройка конфигурации 
 
-* Устанавливаем количество обработчиков
-* Устанавливаем приоритеты обработчиков
-* Задааем имя сервера
+см. rel/files/app.config
 
-`ebin/mastered_test.app`
+* Устанавливаем количество обработчиков number_of_workers
+* Задаем список нод в кластере cnodes
 
-* `orders` : список приоритетов обработчиков _на данной ноде_.
-    То есть `[1,35]` ознаечает, что первый обработчик имеет приоритет `1`, второй - `35`
 
-* `number_of_workers` : число обработчиков
+### Генерации тестового сервера
+`./rebar generate`
 
-* address : строка адреса. Используется для идентификации ноды при общении с клиентом.
-
+### Создание нескольких серверов
+* Копируем rel/stest в TestDir/statet1,...,TestDir/statetN
+* Меняем имя сервера в TestDir/statetN/etc/vm.args
 ### Настройка zookeeper
 
 * Устанавливаем
 
 * Создаем пути для проведения голосований обработчиками (например, через zkCli.sh)
 
-`/mastered_test/election/workerN`, где `N=1,,Число обработчиков`.
+`/mastered_test/election/workerN`, где `N=0,,Число обработчиков-1`.
 
 ## Использование
 
 Для удобства управления выделен фасад mtf.
 
-* Запуск обработчиков:
-
-  `mtf:start()`
-
-* Остановка обработчиков:
-
-  `mtf:stop()`
+* Запуск:
+ TestDir/statetN/bin/mtest start (лог пишется в TestDir/statetN/log/erlang.log)  или TestDir/statetN/bin/mtest console
 
 * Запрос к обработчику
 
