@@ -1,27 +1,27 @@
 -module(mastered_test_sup).
 -include_lib("log.hrl").
 -behaviour(supervisor).
--export([start_link/4, init/1, ask/1]).
+-export([start_link/2, init/1, ask/1]).
 
-start_link(ConnectionPid, Orders, NumberOfWorkers, Address) ->
-	supervisor:start_link({local, ?MODULE}, ?MODULE, {ConnectionPid, Orders, NumberOfWorkers, Address}).
+start_link(ConnectionPid, Orders) ->
+	supervisor:start_link({local, ?MODULE}, ?MODULE, {ConnectionPid, Orders}).
 
 
 
-init({ConnectionPid, Orders, NumberOfWorkers, Address}) ->
+init({ConnectionPid, Orders}) ->
 
-	Workers = create_workers({Address, ConnectionPid}, Orders, NumberOfWorkers, 1),
+	Workers = create_workers(ConnectionPid, Orders),
 	{ok,{{one_for_one, 100, 600}, Workers}}.
 
-create_workers(_, _, 0, _)
+create_workers(_,[])
 	-> [];
-create_workers(Params, [Order | Orders], WorkersLeft, WorkerNum) ->
-	[create_worker(Params, WorkerNum, Order) | create_workers(Params, Orders, WorkersLeft-1, WorkerNum+1)].
+create_workers(Params, [Order | Orders]) ->
+	[create_worker(Params,Order) | create_workers(Params, Orders)].
 
-create_worker({Address, ConnectionPid}, WorkerNum, Order) ->
-	?LOG("Creating worker ~w", [WorkerNum]),
-	Id = {worker, WorkerNum},
-	Func = {worker, start_link, [ConnectionPid, Order, {Address, WorkerNum}]},
+create_worker(ConnectionPid,Order) ->
+	?LOG("Creating worker ~w", [Order]),
+	Id = {worker, Order},
+	Func = {worker, start_link, [ConnectionPid, Order]},
 	{Id, Func, permanent, 1000, worker, [worker]}.
 
 ask(WorkerNum) ->

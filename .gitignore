@@ -7,3 +7,4 @@ ebin
 .project
 .settings
 doc
+rel/stest*

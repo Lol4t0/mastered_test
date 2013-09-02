@@ -2,31 +2,32 @@
 -include_lib("log.hrl").
 -behaviour(gen_server).
 -behaviour(leader_selector).
--export([start_link/3,
+-export([start_link/2,
 		 restart_leader/1, restart_idle/2,
 		 client_request/1,
 		 init/1, terminate/2, handle_call/3, handle_cast/2, handle_info/2, code_change/3]).
 
 -define(PREFIX, "/mastered_test/election/worker~w").
 
-start_link(ConnectionPid, Order, {SelfAddress, WorkerNum}) ->
-	gen_server:start_link(?MODULE, [ConnectionPid, Order, SelfAddress, WorkerNum], []).
+-record(state,{worker,selector,state}).
+start_link(ConnectionPid, Order) ->
+	gen_server:start_link(?MODULE, [ConnectionPid, Order], []).
 
 
-init([ConnectionPid, Order, SelfAddress, WorkerNum]) ->
-	?LOG("starting worker~w", [WorkerNum]),
+init([ConnectionPid, {Worker,Order}]) ->
+	?LOG("starting worker~w", [{Worker,Order}]),
 	process_flag(trap_exit, true),
-	WorkerZNodePath = lists:flatten(io_lib:format(?PREFIX, [WorkerNum])),
-	case leader_selector:start_link(ConnectionPid, ?MODULE, SelfAddress, WorkerZNodePath, Order, self()) of
+	WorkerZNodePath = lists:flatten(io_lib:format(?PREFIX, [Worker])),
+	case leader_selector:start_link(ConnectionPid, ?MODULE,WorkerZNodePath, Order, self()) of
 		{ok, SelectorRef} ->
 			?LOG("ok", []),
-			{ok, {SelfAddress, WorkerNum, SelectorRef, starting}};
+			{ok,#state{worker=Worker,selector=SelectorRef,state=starting}};
 		Error ->
 			?LOG("Failed~w", [Error]),
 			{stop, Error}
 	end.
 
-terminate(_Reason, {_SelfAddress, WorkerNum, SelectorRef, _Mode}) ->
+terminate(_Reason,#state{selector=SelectorRef,worker=WorkerNum}) ->
 	?LOG("Deleting worker ~w", [WorkerNum]),
 	leader_selector:stop(SelectorRef).
 
@@ -44,20 +45,19 @@ client_request(Ref) ->
 
 handle_call(client_request, _From, State ) ->
 	Answer = case State of
-		{_SelfAddress, _WorkerNum, _SelectorRef, starting} ->
+		#state{state=starting} ->
 			{error, "Worker is not initialized yet."};
-		{SelfAddress, WorkerNum, _SelectorRef, leader} ->
-			{ok, io_lib:format("The Worker ~w on the node ~s is answering you, human. 42.~n", [WorkerNum, SelfAddress])};
-		{SelfAddress, WorkerNum, _SelectorRef, {idle, ActiveAddress}} ->
-			{ok, io_lib:format("Worker ~w on the node ~s is not in a position to answer you, Human. Ask node ~s, please~n.",
-						   [WorkerNum, SelfAddress, ActiveAddress])}
+		#state{worker=WorkerNum,state=leader}->
+			{ok, io_lib:format("The Worker ~w on the node ~p is answering you, human. 42.~n", [WorkerNum, node()])};
+		#state{worker=WorkerNum,state={idle, ActiveAddress}}->
+			{ok, io_lib:format("Worker ~w on the node ~p is not in a position to answer you, Human. Ask node ~s, please~n.",
+						   [WorkerNum,node(), ActiveAddress])}
 		end,
 	{reply, Answer, State}.
 
 
-handle_cast(S, {SelfAddress, WorkerNum, SelectorRef, _Mode}) ->
-	NewState = {SelfAddress, WorkerNum, SelectorRef, S},
-	{noreply, NewState}.
+handle_cast(S,State) ->
+	{noreply, State#state{state=S}}.
 
 
 code_change(_, _, _) ->
