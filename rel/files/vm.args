@@ -1,0 +1,26 @@
+
+## Name of the node
+-name  {{node}}
+
+## Cookie for distributed erlang
+-setcookie test
+
+## Heartbeat management; auto-restarts VM if it dies or becomes unresponsive
+## (Disabled by default..use with caution!)
+-heart
+-env ERL_CRASH_DUMP ./log/erl_crash.dump
+-env HEART_BEAT_TIMEOUT 60
+
+## Enable kernel poll and a few async threads
++K true
++A 16
++P 100000000
+
+## Increase number of concurrent ports/sockets
+-env ERL_MAX_PORTS 4096
+
+## Tweak GC to run more often
+-env ERL_FULLSWEEP_AFTER 0
+
++zdbbl 102400
+
