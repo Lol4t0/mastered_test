@@ -19,5 +19,5 @@ restart() ->
 	start().
 
 ask(N) ->
-	{ok, S} = mastered_test:ask(N),
+	{ok, S} = mastered_test_sup:ask(N),
 	io:format("~s", [S]).

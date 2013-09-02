@@ -1,4 +1,4 @@
--module(mastered_test).
+-module(mastered_test_sup).
 -include_lib("log.hrl").
 -behaviour(supervisor).
 -export([start_link/4, init/1, ask/1]).

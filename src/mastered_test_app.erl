@@ -16,7 +16,7 @@ start(_StartType, _StartArgs) ->
 	{ok, NumberOfWorkers} = application:get_env(number_of_workers),
 	{ok, Address} = application:get_env(address),
 	{ok, ConnectionPid} = ezk:start_connection(),
-	case mastered_test:start_link(ConnectionPid, Orders, NumberOfWorkers, Address) of
+	case mastered_test_sup:start_link(ConnectionPid, Orders, NumberOfWorkers, Address) of
 		{ok, SupPid} ->
 			{ok, SupPid, ConnectionPid};
 		Error ->
